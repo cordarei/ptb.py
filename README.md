@@ -1,6 +1,6 @@
 # PTB Tools
 
-*Author:* Joseph Irwin
+**Author:** Joseph Irwin
 
 Some tools for reading trees from Penn Treebank-formatted files in Python.
 
