@@ -1,7 +1,12 @@
 """
-Module: sexp.py
+Functions for lazily parsing s-exps from a file
 
-Contains functions for lazily parsing s-exps from a file.
+Author: Joseph Irwin
+
+To the extent possible under law, the person who associated CC0 with
+this work has waived all copyright and related or neighboring rights
+to this work.
+http://creativecommons.org/publicdomain/zero/1.0/
 """
 
 
@@ -49,13 +54,13 @@ def sexps(tokens):
         else:
             assert(els[0] == '(' and els[-1] == ')')
             yield list(sexps(els[1:-1]))
-            
+
 def stringify(sexp):
     if isinstance(sexp, list):
         return '({})'.format(' '.join(stringify(s) for s in sexp))
     else:
         return sexp
-        
+
 def isterminal(sexp):
     return (
         len(sexp) == 2 and
@@ -73,6 +78,27 @@ def terminals(sexp, include_nulls=False):
             if isinstance(s, list):
                 for t in terminals(s, include_nulls):
                     yield t
+
+def remove_coindex(tag):
+    return re.sub('-\d+$', '', tag)
+
+def simplify_tag(tag):
+    m = re.match(r'([A-Z]+)(-[A-Z]{3})*(-\d+)?$', tag)
+    if m:
+        return m.group(1)
+    else:
+        return tag
+
+def pattern(sexp, remove_functions=True, remove_quotes=False, remove_initial_cc=False):
+    if len(sexp) == 1 and isinstance(sexp, list):
+        sexp = sexp[0]
+    children = [c[0] for c in sexp[1:]]
+    if remove_quotes:
+        children = [c for c in children if c not in ("``", "''")]
+    if remove_initial_cc and children[0] == 'CC' and children[1] not in (',', ':'):
+        children = children[1:]
+    proc = (simplify_tag if remove_functions else remove_coindex)
+    return (proc(sexp[0]), list(proc(c) for c in children))
 
 # for testing
 def print_tokens(filename, include_nulls=False):
