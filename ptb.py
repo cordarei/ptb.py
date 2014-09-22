@@ -47,7 +47,67 @@ def lex(line_or_lines):
     for n,line in enumerate(line_or_lines):
         line.strip()
         for m in _token_pat.finditer(line):
-            pass
+            if m.group() == '(':
+                yield Token(LPAREN_TOKEN)
+            elif m.group() == ')':
+                yield Token(RPAREN_TOKEN)
+            else:
+                yield Token(STRING_TOKEN, value=m.group())
+
+
+class Symbol:
+    _pat = re.compile(r'(?P<label>^[^0-9=-]+)|(?:-(?P<tag>[^0-9=-]+))|(?:=(?P<parind>[0-9]+))|(?:-(?P<coind>[0-9]+))')
+    def __init__(self, label):
+        self.label = label
+        self.tags = []
+        self.coindex = None
+        self.parindex = None
+        for m in self._pat.finditer(label):
+            if m.group('label'):
+                self.label = m.group('label')
+            elif m.group('tag'):
+                self.tags.append(m.group('tag'))
+            elif m.group('parind'):
+                self.parindex = m.group('parind')
+            elif m.group('coind'):
+                self.coindex = m.group('coind')
+
+class Word:
+    def __init__(self, word, pos):
+        self.word = word
+        self.pos = pos
+
+class Texpr:
+    def __init__(self, head, tail):
+        self.head = head
+        self.tail = tail
+
+    def symbol(self):
+        if hasattr(self.head, 'label'):
+            return self.head
+        else:
+            return None
+
+    def children(self):
+        if self.symbol():
+            t = self.tail
+            while t is not None:
+                yield t
+                t = t.tail
+        else:
+            yield return
+
+    def word(self):
+        if hasattr(self.head, 'pos'):
+            return self.head.word
+        else:
+            return None
+
+    def tag(self):
+        try:
+            return self.head.pos
+        except AttributeError:
+            return None
 
 
 def parse(line_or_lines):
