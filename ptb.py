@@ -89,13 +89,11 @@ class Texpr:
             return None
 
     def children(self):
-        if self.symbol():
+        if self.symbol() is not None:
             t = self.tail
             while t is not None:
                 yield t
                 t = t.tail
-        else:
-            yield return
 
     def word(self):
         if hasattr(self.head, 'pos'):
@@ -111,4 +109,32 @@ class Texpr:
 
 
 def parse(line_or_lines):
-    pass
+    def istok(t, i):
+        return getattr(t, 'token_id', None) is i
+    stack = []
+    for tok in lex(line_or_lines):
+        if tok.token_id is LPAREN_TOKEN:
+            stack.append(tok)
+        elif tok.token_id is STRING_TOKEN:
+            stack.append(tok)
+        else:
+            if (istok(stack[-1], STRING_TOKEN) and
+                istok(stack[-2], STRING_TOKEN) and
+                istok(stack[-3], LPAREN_TOKEN)):
+                w = Word(stack[-1].value, stack[-2].value)
+                stack.pop()
+                stack.pop()
+                stack.pop()
+                stack.append(w)
+            else:
+                tail = None
+                while not istok(stack[-1], LPAREN_TOKEN):
+                    head = stack.pop()
+                    if istok(head, STRING_TOKEN):
+                        head = Symbol(head.value)
+                    tail = Texpr(head, tail)
+                stack.pop()
+                if not stack:
+                    yield tail
+                else:
+                    stack.append(tail)
