@@ -224,6 +224,58 @@ def add_root(tx, root_label='ROOT'):
 
 
 ##################
+# Traversal
+##################
+
+def _all_spans(tx, begin=0):
+    if not tx.symbol() and not tx.tag():
+        tx = tx.head
+
+    end = begin
+    if tx.symbol():
+        for c in tx.children():
+            for span, b2, end in _all_spans(c, end):
+                yield (span, b2, end)
+        yield (str(tx.symbol()), begin, end)
+    elif tx.tag():
+        if tx.tag() != '-NONE-':
+            end += 1
+        yield (tx.tag(), begin, end)
+
+# def _all_spans(tx):
+#     def succ(t):
+#         return list(t.children())[::-1]
+#     if tx.symbol() is None and tx.tag() is None:
+#         tx = tx.head
+#     stack = [(tx, 0, succ(tx))]
+#     state = 0
+#     while stack:
+#         if stack[-1][2]:
+#             t = stack[-1][2].pop()
+#             if t.symbol() is None and t.tag() is None:
+#                 t = t.head
+#             stack.append( (t, state, succ(t)) )
+#         else:
+#             t, begin, _ = stack.pop()
+#             if t.tag() and t.tag() != '-NONE-':
+#                 state += 1
+#             end = state
+#             span = (str(t.symbol()) if t.symbol() else t.tag())
+#             yield (span, begin, end)
+
+def all_spans(tx):
+    """
+    Returns a list of spans in a tree. The spans are ordered so that
+    children follow their parents. However, 'empty' elements (e.g.
+    '-NONE-') may not be sorted correctly.
+    """
+    spans = list(_all_spans(tx, 0))
+    spans.reverse()
+    spans.sort(key=lambda x: (x[1], 1 if x[2] > x[1] else 0, -x[2]))
+    return spans
+
+
+##################
 # Tests
 ##################
 
