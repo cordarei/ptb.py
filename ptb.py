@@ -11,7 +11,13 @@ http://creativecommons.org/publicdomain/zero/1.0/
 """
 
 
+import docopt
 import re
+
+
+##################
+# Lexer
+##################
 
 
 LPAREN_TOKEN = object()
@@ -55,6 +61,11 @@ def lex(line_or_lines):
                 yield Token(STRING_TOKEN, value=m.group())
 
 
+##################
+# Parser
+##################
+
+
 class Symbol:
     _pat = re.compile(r'(?P<label>^[^0-9=-]+)|(?:-(?P<tag>[^0-9=-]+))|(?:=(?P<parind>[0-9]+))|(?:-(?P<coind>[0-9]+))')
     def __init__(self, label):
@@ -71,6 +82,19 @@ class Symbol:
                 self.parindex = m.group('parind')
             elif m.group('coind'):
                 self.coindex = m.group('coind')
+
+    def simplify(self):
+        self.tags = []
+        self.coindex = None
+        self.parindex = None
+
+    def __str__(self):
+        return '{}{}{}{}'.format(
+            self.label,
+            ''.join('-{}'.format(t) for t in self.tags),
+            ('={}'.format(self.parindex) if self.parindex is not None else ''),
+            ('-{}'.format(self.coindex) if self.coindex is not None else '')
+        )
 
 class Word:
     def __init__(self, word, pos):
@@ -107,6 +131,20 @@ class Texpr:
         except AttributeError:
             return None
 
+    def __str__(self):
+        if self.word():
+            return '({} {})'.format(self.tag(), self.word())
+        elif self.symbol():
+            return '({} {})'.format(
+                self.head,
+                ' '.join(
+                    str(c if c.word() or c.symbol() else c.head)
+                    for c in self.children()
+                )
+            )
+        else:
+            return '({})'.format(self.head)
+
 
 def parse(line_or_lines):
     def istok(t, i):
@@ -138,3 +176,69 @@ def parse(line_or_lines):
                     yield tail
                 else:
                     stack.append(tail)
+
+
+##################
+# Transforms
+##################
+
+
+def remove_empty_elements(tx):
+    if tx.word():
+        if tx.tag() == '-NONE-':
+            tx.head = None
+    elif tx.symbol():
+        n = tx
+        while n.tail is not None:
+            m = n.tail
+            remove_empty_elements(m)
+            if m.head is None:
+                n.tail = m.tail
+            else:
+                n = n.tail
+        if tx.tail is None:
+            tx.head = None
+    else:
+        remove_empty_elements(tx.head)
+        if tx.head.head is None:
+            tx.head = None
+
+
+def simplify_labels(tx):
+    if tx.symbol():
+        tx.symbol().simplify()
+        for c in tx.children():
+            simplify_labels(c)
+    elif tx.word() is None:
+        simplify_labels(tx.head)
+
+
+_dummy_labels = ('ROOT', 'TOP')
+def add_root(tx, root_label='ROOT'):
+    if tx.symbol() is None and tx.tail is None:
+        return Texpr(Symbol(root_label), tx)
+    elif tx.symbol() and tx.symbol().label in _dummy_labels:
+        return Texpr(Symbol(root_label), tx.tail)
+    else:
+        return Texpr(Symbol(root_label), Texpr(tx, None))
+
+
+##################
+# Tests
+##################
+
+
+def runtests():
+    pass
+
+
+##################
+# Main
+##################
+
+
+def main():
+    pass
+
+if __name__ == "__main__":
+    pass
