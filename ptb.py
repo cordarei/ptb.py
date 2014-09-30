@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 ptb.py: Module for reading and transforming trees in the Penn Treebank
 format.
@@ -11,7 +13,8 @@ http://creativecommons.org/publicdomain/zero/1.0/
 """
 
 
-import docopt
+from __future__ import print_function
+
 import re
 
 
@@ -281,7 +284,7 @@ def all_spans(tx):
 
 
 def runtests():
-    pass
+    assert False, "Tests not implemented yet."
 
 
 ##################
@@ -289,8 +292,35 @@ def runtests():
 ##################
 
 
-def main():
-    pass
+def main(args):
+    """
+    Usage:
+      ptb process [options] [--] <file>
+      ptb test
+      ptb -h | --help
+
+    Options:
+      --add-root                Add a root node to the tree.
+      -r=ROOT --root=ROOT       Specify label of root node. [default: ROOT]
+      --simplify-labels         Simplify constituent labels.
+      --remove-empties          Remove empty elements.
+      -h --help                 Show this screen.
+    """
+    from docopt import docopt
+    args = docopt(main.__doc__, argv=args)
+    if args['process']:
+        with open(args['<file>'], 'r') as f:
+            for t in parse(f):
+                if args['--remove-empties']:
+                    remove_empty_elements(t)
+                if args['--simplify-labels']:
+                    simplify_labels(t)
+                if args['--add-root']:
+                    t = add_root(t, root_label=args['--root'])
+                print(t)
+    if args['test']:
+        runtests()
 
 if __name__ == "__main__":
-    pass
+    import sys
+    main(sys.argv[1:])
