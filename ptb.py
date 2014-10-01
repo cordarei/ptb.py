@@ -296,6 +296,7 @@ def main(args):
     """
     Usage:
       ptb process [options] [--] <file>
+      ptb dump_sentences [--] <file>
       ptb test
       ptb -h | --help
 
@@ -308,16 +309,43 @@ def main(args):
     """
     from docopt import docopt
     args = docopt(main.__doc__, argv=args)
+
+    def trees():
+        if args['<file>'] == '-':
+            for t in parse(sys.stdin):
+                yield t
+        else:
+            with open(args['<file>'], 'r') as f:
+                for t in parse(f):
+                    yield t
+
     if args['process']:
-        with open(args['<file>'], 'r') as f:
-            for t in parse(f):
-                if args['--remove-empties']:
-                    remove_empty_elements(t)
-                if args['--simplify-labels']:
-                    simplify_labels(t)
-                if args['--add-root']:
-                    t = add_root(t, root_label=args['--root'])
-                print(t)
+        for t in trees():
+            if args['--remove-empties']:
+                remove_empty_elements(t)
+            if args['--simplify-labels']:
+                simplify_labels(t)
+            if args['--add-root']:
+                t = add_root(t, root_label=args['--root'])
+            print(t)
+
+    if args['dump_sentences']:
+        for t in trees():
+            remove_empty_elements(t)
+            t = add_root(t)
+            t = next(t.children())
+            stack = [t]
+            words = []
+            while stack:
+                t = stack.pop()
+                if not t.symbol() and not t.word():
+                    t = t.head
+                if t.word():
+                    words.append(t.word())
+                else:
+                    stack.extend(reversed(list(t.children())))
+            print(' '.join(words))
+
     if args['test']:
         runtests()
 
