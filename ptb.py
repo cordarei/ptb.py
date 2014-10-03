@@ -284,7 +284,45 @@ def all_spans(tx):
 
 
 def runtests():
-    assert False, "Tests not implemented yet."
+    test = (
+        """( (S (S-TPC-1 (NP-SBJ (PRP xx) ) (ADVP (RB xx) ) (VP (VBZ xx) (NP-PRD (DT xx) (NN xx) (NN xx) ))) (, ,) (NP-SBJ (NNS xx) ) (VP (VBP xx) (SBAR (-NONE- 0) (S (-NONE- *T*-1) ))) (. .) ))""",
+        """(ROOT (S (S (NP (PRP xx) ) (ADVP (RB xx) ) (VP (VBZ xx) (NP (DT xx) (NN xx) (NN xx) ))) (, ,) (NP (NNS xx)) (VP (VBP xx)) (. .) ))"""
+    )
+    spans = (
+        [
+            ('S', 0, 10),
+            ('S-TPC-1', 0, 6),
+            ('NP-SBJ', 0, 1),
+            ('PRP', 0, 1),
+            ('ADVP', 1, 2),
+            ('RB', 1, 2),
+            ('VP', 2, 6),
+            ('VBZ', 2, 3),
+            ('NP-PRD', 3, 6),
+            ('DT', 3, 4),
+            ('NN', 4, 5),
+            ('NN', 5, 6),
+            (',', 6, 7),
+            ('NP-SBJ', 7, 8),
+            ('NNS', 7, 8),
+            ('VP', 8, 9),
+            ('VBP', 8, 9),
+            ('SBAR', 9, 9),
+            ('S', 9, 9),
+            ('-NONE-', 9, 9),
+            ('-NONE-', 9, 9),
+            ('.', 9, 10)
+        ],
+    )
+    t = next(parse(test[0]))
+    u = next(parse(test[1]))
+
+    assert set(spans[0]) == set(all_spans(t))
+
+    remove_empty_elements(t)
+    simplify_labels(t)
+    t = add_root(t)
+    assert set(all_spans(t)) == set(all_spans(u))
 
 
 ##################
