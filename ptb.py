@@ -99,15 +99,16 @@ class Symbol:
             ('-{}'.format(self.coindex) if self.coindex is not None else '')
         )
 
-class Word:
+class Leaf:
     def __init__(self, word, pos):
         self.word = word
         self.pos = pos
 
-class Texpr:
-    def __init__(self, head, tail):
+class TExpr:
+    def __init__(self, head, first_child, next_sib):
         self.head = head
-        self.tail = tail
+        self.first_child = first_child
+        self.next_sibling = next_sib
 
     def symbol(self):
         if hasattr(self.head, 'label'):
@@ -116,37 +117,25 @@ class Texpr:
             return None
 
     def children(self):
-        if self.symbol() is not None:
-            t = self.tail
-            while t is not None:
-                yield t
-                t = t.tail
+        n = self.first_child
+        while n is not None:
+            yield n
+            n = n.next_sibling
 
-    def word(self):
+    def leaf(self):
         if hasattr(self.head, 'pos'):
-            return self.head.word
+            return self.head
         else:
-            return None
-
-    def tag(self):
-        try:
-            return self.head.pos
-        except AttributeError:
             return None
 
     def __str__(self):
-        if self.word():
-            return '({} {})'.format(self.tag(), self.word())
-        elif self.symbol():
-            return '({} {})'.format(
-                self.head,
-                ' '.join(
-                    str(c if c.word() or c.symbol() else c.head)
-                    for c in self.children()
-                )
-            )
+        if self.leaf():
+            return '({} {})'.format(self.leaf().pos, self.leaf().word)
         else:
-            return '({})'.format(self.head)
+            return '({} {})'.format(
+                self.head if self.head is not None else '',
+                ' '.join(str(c) for c in self.children())
+            )
 
 
 def parse(line_or_lines):
@@ -162,23 +151,32 @@ def parse(line_or_lines):
             if (istok(stack[-1], STRING_TOKEN) and
                 istok(stack[-2], STRING_TOKEN) and
                 istok(stack[-3], LPAREN_TOKEN)):
-                w = Word(stack[-1].value, stack[-2].value)
+                w = Leaf(stack[-1].value, stack[-2].value)
                 stack.pop()
                 stack.pop()
                 stack.pop()
-                stack.append(w)
+                stack.append(TExpr(w, None, None))
             else:
+                tx = None
                 tail = None
                 while not istok(stack[-1], LPAREN_TOKEN):
                     head = stack.pop()
                     if istok(head, STRING_TOKEN):
-                        head = Symbol(head.value)
-                    tail = Texpr(head, tail)
+                        tx = TExpr(
+                            Symbol(head.value),
+                            first_child = tail,
+                            next_sibling = None
+                        )
+                    else:
+                        head.next_sibling = tail
+                        tail = head
                 stack.pop()
+                if tx is None:
+                    tx = TExpr(None, tail, None)
                 if not stack:
-                    yield tail
+                    yield tx
                 else:
-                    stack.append(tail)
+                    stack.append(tx)
 
 
 ##################
@@ -219,11 +217,11 @@ def simplify_labels(tx):
 _dummy_labels = ('ROOT', 'TOP')
 def add_root(tx, root_label='ROOT'):
     if tx.symbol() is None and tx.tail is None:
-        return Texpr(Symbol(root_label), tx)
+        return TExpr(Symbol(root_label), tx)
     elif tx.symbol() and tx.symbol().label in _dummy_labels:
-        return Texpr(Symbol(root_label), tx.tail)
+        return TExpr(Symbol(root_label), tx.tail)
     else:
-        return Texpr(Symbol(root_label), Texpr(tx, None))
+        return TExpr(Symbol(root_label), TExpr(tx, None))
 
 
 ##################
@@ -244,27 +242,6 @@ def _all_spans(tx, begin=0):
         if tx.tag() != '-NONE-':
             end += 1
         yield (tx.tag(), begin, end)
-
-# def _all_spans(tx):
-#     def succ(t):
-#         return list(t.children())[::-1]
-#     if tx.symbol() is None and tx.tag() is None:
-#         tx = tx.head
-#     stack = [(tx, 0, succ(tx))]
-#     state = 0
-#     while stack:
-#         if stack[-1][2]:
-#             t = stack[-1][2].pop()
-#             if t.symbol() is None and t.tag() is None:
-#                 t = t.head
-#             stack.append( (t, state, succ(t)) )
-#         else:
-#             t, begin, _ = stack.pop()
-#             if t.tag() and t.tag() != '-NONE-':
-#                 state += 1
-#             end = state
-#             span = (str(t.symbol()) if t.symbol() else t.tag())
-#             yield (span, begin, end)
 
 def all_spans(tx):
     """
