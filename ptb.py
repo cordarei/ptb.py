@@ -18,14 +18,22 @@ from __future__ import print_function
 import re
 
 
+#######
+# Utils
+#######
+
+def gensym():
+    return object()
+
+
 ##################
 # Lexer
 ##################
 
 
-LPAREN_TOKEN = object()
-RPAREN_TOKEN = object()
-STRING_TOKEN = object()
+LPAREN_TOKEN = gensym()
+RPAREN_TOKEN = gensym()
+STRING_TOKEN = gensym()
 
 class Token(object):
     _token_ids = {LPAREN_TOKEN:"(", RPAREN_TOKEN:")", STRING_TOKEN:"STRING"}
@@ -105,10 +113,10 @@ class Leaf:
         self.pos = pos
 
 class TExpr:
-    def __init__(self, head, first_child, next_sib):
+    def __init__(self, head, first_child, next_sibling):
         self.head = head
         self.first_child = first_child
-        self.next_sibling = next_sib
+        self.next_sibling = next_sibling
 
     def symbol(self):
         if hasattr(self.head, 'label'):
@@ -180,68 +188,83 @@ def parse(line_or_lines):
 
 
 ##################
+# Traversal
+##################
+
+def traverse(tx, pre=None, post=None, state=None):
+    """
+    Traverse a tree.
+
+    Allows pre-, post-, or full-order traversal. If given, `pre` and
+    `post` should be functions or callable objects accepting two
+    arguments: a TExpr node and a state object. If the state is used,
+    `pre` and `post` should return a new state object.
+    """
+    if pre is not None:
+        state = pre(tx, state)
+    for c in tx.children():
+        state = traverse(c, pre, post, state)
+    if post is not None:
+        state = post(tx, state)
+    return state
+
+
+##################
 # Transforms
 ##################
 
 
 def remove_empty_elements(tx):
-    if tx.word():
-        if tx.tag() == '-NONE-':
-            tx.head = None
-    elif tx.symbol():
-        n = tx
-        while n.tail is not None:
-            m = n.tail
-            remove_empty_elements(m)
-            if m.head is None:
-                n.tail = m.tail
+    q_none = gensym()
+    q_ok = gensym()
+    state = [[]]
+
+    def pre(tx, st):
+        if tx.leaf() is None:
+            return st + [[]]
+        else:
+            return st
+
+    def post(tx, st):
+        q = q_ok
+        if tx.leaf():
+            q = q_none if tx.leaf().pos == '-NONE-' else q_ok
+        else:
+            cs = st.pop()
+            cs = [c for q,c in cs if q is q_ok]
+            if cs:
+                tx.first_child = cs[0]
+                for c,d in zip(cs[:-1],cs[1:]):
+                    c.next_sibling = d
+                cs[-1].next_sibling = None
             else:
-                n = n.tail
-        if tx.tail is None:
-            tx.head = None
-    else:
-        remove_empty_elements(tx.head)
-        if tx.head.head is None:
-            tx.head = None
+                q = q_none
+        st[-1].append( (q, tx) )
+        return st
+
+    state = traverse(tx, pre, post, state)
 
 
 def simplify_labels(tx):
-    if tx.symbol():
-        tx.symbol().simplify()
-        for c in tx.children():
-            simplify_labels(c)
-    elif tx.word() is None:
-        simplify_labels(tx.head)
+    def proc(tx, st):
+        if tx.symbol():
+            tx.symbol().simplify()
+    traverse(tx, proc)
 
 
 _dummy_labels = ('ROOT', 'TOP')
 def add_root(tx, root_label='ROOT'):
-    if tx.symbol() is None and tx.tail is None:
-        return TExpr(Symbol(root_label), tx)
-    elif tx.symbol() and tx.symbol().label in _dummy_labels:
-        return TExpr(Symbol(root_label), tx.tail)
+    if (tx.head is None or (tx.symbol() and tx.symbol().label in _dummy_labels)):
+        tx.head = Symbol(root_label)
     else:
-        return TExpr(Symbol(root_label), TExpr(tx, None))
+        tx = TExpr(Symbol(root_label), tx)
+    return tx
 
 
 ##################
-# Traversal
+# Utilities
 ##################
 
-def _all_spans(tx, begin=0):
-    if not tx.symbol() and not tx.tag():
-        tx = tx.head
-
-    end = begin
-    if tx.symbol():
-        for c in tx.children():
-            for span, b2, end in _all_spans(c, end):
-                yield (span, b2, end)
-        yield (str(tx.symbol()), begin, end)
-    elif tx.tag():
-        if tx.tag() != '-NONE-':
-            end += 1
-        yield (tx.tag(), begin, end)
 
 def all_spans(tx):
     """
@@ -249,9 +272,31 @@ def all_spans(tx):
     children follow their parents. However, 'empty' elements (e.g.
     '-NONE-') may not be sorted correctly.
     """
-    spans = list(_all_spans(tx, 0))
+    state = ([], [], 0)
+
+    def pre(tx, st):
+        spans, stack, begin = st
+        return (spans, stack + [begin], begin)
+
+    def post(tx, st):
+        spans, stack, end = st
+        begin = stack.pop()
+        label = None
+        if tx.leaf():
+            if tx.leaf().pos != '-NONE-':
+                end = begin + 1
+            label = tx.leaf().pos
+        elif tx.symbol():
+            label = str(tx.symbol())
+        return (
+            spans + [(label, begin, end)] if label else spans,
+            stack,
+            end
+        )
+
+    state = traverse(tx, pre, post, state)
+    spans = state[0]
     spans.reverse()
-    spans.sort(key=lambda x: (x[1], 1 if x[2] > x[1] else 0, -x[2]))
     return spans
 
 
@@ -260,7 +305,10 @@ def all_spans(tx):
 ##################
 
 
-def runtests():
+def dotests():
+    def expectequal(a,b):
+        assert a == b, '\n{}\n{}'.format(a,b)
+
     test = (
         """( (S (S-TPC-1 (NP-SBJ (PRP xx) ) (ADVP (RB xx) ) (VP (VBZ xx) (NP-PRD (DT xx) (NN xx) (NN xx) ))) (, ,) (NP-SBJ (NNS xx) ) (VP (VBP xx) (SBAR (-NONE- 0) (S (-NONE- *T*-1) ))) (. .) ))""",
         """(ROOT (S (S (NP (PRP xx) ) (ADVP (RB xx) ) (VP (VBZ xx) (NP (DT xx) (NN xx) (NN xx) ))) (, ,) (NP (NNS xx)) (VP (VBP xx)) (. .) ))"""
@@ -294,12 +342,12 @@ def runtests():
     t = next(parse(test[0]))
     u = next(parse(test[1]))
 
-    assert set(spans[0]) == set(all_spans(t))
+    expectequal( set(spans[0]) , set(all_spans(t)) )
 
     remove_empty_elements(t)
     simplify_labels(t)
     t = add_root(t)
-    assert set(all_spans(t)) == set(all_spans(u))
+    expectequal( set(all_spans(t)) , set(all_spans(u)) )
 
 
 ##################
@@ -362,7 +410,7 @@ def main(args):
             print(' '.join(words))
 
     if args['test']:
-        runtests()
+        dotests()
 
 if __name__ == "__main__":
     import sys
