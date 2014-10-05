@@ -262,7 +262,7 @@ def add_root(tx, root_label='ROOT'):
 
 
 ##################
-# Utilities
+# Other Useful Functions
 ##################
 
 
@@ -294,7 +294,8 @@ def all_spans(tx):
         elif tx.symbol():
             label = str(tx.symbol())
 
-        spans.append((num, (label, begin, end)))
+        if label:
+            spans.append((num, (label, begin, end)))
 
         return (
             spans,
@@ -307,6 +308,108 @@ def all_spans(tx):
     spans.sort()
     return [s for n,s in spans]
 
+
+##################
+# Parse Tree
+##################
+
+class Span(object):
+    def __init__(self, label, begin, end):
+        self.label = label
+        self.begin = begin
+        self.end = end
+
+    def tojson(self):
+        return [self.label, self.begin, self.end]
+
+
+class GroundedTree(object):
+    def __init__(self, span, children):
+        self.span = span
+        self.children = children
+
+    def tojson(self):
+        return {
+            "head" : self.span.tojson(),
+            "children" : [c.tojson() for c in self.children]
+        }
+
+
+class ParsedSentence(object):
+    def __init__(self, terminals, tree):
+        self.terminals = terminals
+        self.tree = tree
+
+    def _index(self, begin_or_span=0, end=None):
+        b = begin_or_span
+        try:
+            if end is None:
+                return self.terminals[b:]
+            else:
+                return self.terminals[b:end]
+        except TypeError:
+            try:
+                return self.terminals[b.span.begin:b.span.end]
+            except AttributeError:
+                return self.terminals[b.begin:b.end]
+
+    def words(self, begin_or_span=0, end=None):
+        for t in self._index(begin_or_span, end):
+            yield t.word
+
+    def tagged_words(self, begin_or_span=0, end=None):
+        for t in self._index(begin_or_span, end):
+            yield (t.pos, t.word)
+
+    def tags(self, begin_or_span=0, end=None):
+        for t in self._index(begin_or_span, end):
+            yield t.pos
+
+    def tojson(self):
+        return {
+            "parse" : self.tree.tojson(),
+            "words" : [t.word for t in self.terminals],
+            "tags" : [t.pos for t in self.terminals]
+        }
+
+
+def make_grounded(tx):
+    state = ([([], 0)], 0)
+
+    def pre(tx, st):
+        stack, begin = st
+        return (
+            stack + [([], begin)],
+            begin
+        )
+
+    def post(tx, st):
+        stack, end = st
+        children, begin = stack.pop()
+        if tx.leaf():
+            end += 1
+        grounded = GroundedTree(
+            Span(
+                tx.symbol() or "<w>",
+                begin,
+                end
+            ),
+            children
+        )
+        stack[-1][0].append(grounded)
+        return (stack, end)
+
+    stack, _ = traverse(tx, pre, post, state)
+    gs, _ = stack[0]
+    return gs[0]
+
+def leaves(tx):
+    def proc(tx, st):
+        return st + ([tx.leaf()] if tx.leaf() else [])
+    return traverse(tx, proc, state=[])
+
+def make_parsed_sent(tx):
+    return ParsedSentence(leaves(tx), make_grounded(tx))
 
 ##################
 # Tests
