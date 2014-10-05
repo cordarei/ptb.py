@@ -320,7 +320,7 @@ class Span(object):
         self.end = end
 
     def tojson(self):
-        return [self.label, self.begin, self.end]
+        return [str(self.label), self.begin, self.end]
 
 
 class GroundedTree(object):
