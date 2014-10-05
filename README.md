@@ -1,8 +1,11 @@
-# PTB Tools
+# PTB.py
 
 **Author:** Joseph Irwin
 
-Some tools for reading trees from Penn Treebank-formatted files in Python.
+A Python module for reading, writing, and transforming trees in the
+Penn Treebank format. The command-line interface implements
+transformations commonly used to prepare trees for input to a parser,
+and supports output in several formats as well.
 
 
 ## Permissions
