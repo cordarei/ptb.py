@@ -268,19 +268,24 @@ def add_root(tx, root_label='ROOT'):
 
 def all_spans(tx):
     """
-    Returns a list of spans in a tree. The spans are ordered so that
-    children follow their parents. However, 'empty' elements (e.g.
-    '-NONE-') may not be sorted correctly.
+    Returns a list of spans in a tree. The spans are in depth-first
+    traversal order.
     """
-    state = ([], [], 0)
+    state = ([], [], 0, 0)
 
     def pre(tx, st):
-        spans, stack, begin = st
-        return (spans, stack + [begin], begin)
+        spans, stack, begin, count = st
+        return (
+            spans,
+            stack + [(count, begin)],
+            begin,
+            count + 1
+        )
 
     def post(tx, st):
-        spans, stack, end = st
-        begin = stack.pop()
+        spans, stack, end, count = st
+        num, begin = stack.pop()
+
         label = None
         if tx.leaf():
             if tx.leaf().pos != '-NONE-':
@@ -288,16 +293,19 @@ def all_spans(tx):
             label = tx.leaf().pos
         elif tx.symbol():
             label = str(tx.symbol())
+
+        spans.append((num, (label, begin, end)))
+
         return (
-            spans + [(label, begin, end)] if label else spans,
+            spans,
             stack,
-            end
+            end,
+            count
         )
 
-    state = traverse(tx, pre, post, state)
-    spans = state[0]
-    spans.reverse()
-    return spans
+    spans, _, _, _ = traverse(tx, pre, post, state)
+    spans.sort()
+    return [s for n,s in spans]
 
 
 ##################
