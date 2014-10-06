@@ -373,6 +373,7 @@ class ParsedSentence(object):
         }
 
 
+TERMINAL_NODE_LABEL = '<t>'
 def make_grounded(tx):
     state = ([([], 0)], 0)
 
@@ -390,7 +391,7 @@ def make_grounded(tx):
             end += 1
         grounded = GroundedTree(
             Span(
-                tx.symbol() or "<w>",
+                tx.symbol() or TERMINAL_NODE_LABEL,
                 begin,
                 end
             ),
