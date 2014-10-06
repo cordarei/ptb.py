@@ -471,7 +471,6 @@ def main(args):
     """
     Usage:
       ptb process [options] [--] <file>
-      ptb dump_sentences [--] <file>
       ptb test
       ptb -h | --help
 
@@ -480,46 +479,49 @@ def main(args):
       -r=ROOT --root=ROOT       Specify label of root node. [default: ROOT]
       --simplify-labels         Simplify constituent labels.
       --remove-empties          Remove empty elements.
+      --format FMT              Specify format to output trees in. [default: ptb]
       -h --help                 Show this screen.
+
+    Support output formats are: ptb, json, sentence, tagged_sentence.
     """
     from docopt import docopt
     args = docopt(main.__doc__, argv=args)
 
+    def trans(t):
+        if args['--remove-empties']:
+            remove_empty_elements(t)
+        if args['--simplify-labels']:
+            simplify_labels(t)
+        if args['--add-root']:
+            t = add_root(t, root_label=args['--root'])
+        return t
+
     def trees():
         if args['<file>'] == '-':
             for t in parse(sys.stdin):
-                yield t
+                yield trans(t)
         else:
             with open(args['<file>'], 'r') as f:
                 for t in parse(f):
-                    yield t
+                    yield trans(t)
 
     if args['process']:
-        for t in trees():
-            if args['--remove-empties']:
-                remove_empty_elements(t)
-            if args['--simplify-labels']:
-                simplify_labels(t)
-            if args['--add-root']:
-                t = add_root(t, root_label=args['--root'])
-            print(t)
-
-    if args['dump_sentences']:
-        for t in trees():
-            remove_empty_elements(t)
-            t = add_root(t)
-            t = next(t.children())
-            stack = [t]
-            words = []
-            while stack:
-                t = stack.pop()
-                if not t.symbol() and not t.word():
-                    t = t.head
-                if t.word():
-                    words.append(t.word())
+        fmt = args['--format']
+        if fmt == 'json':
+            import json
+            o = {'sentences' : [make_parsed_sent(t).tojson() for t in trees()]}
+            print(json.dumps(o))
+        else:
+            for t in trees():
+                # output
+                if fmt == 'ptb':
+                    print(t)
+                elif fmt == 'sentence':
+                    print(' '.join(l.word for l in leaves(t)))
+                elif fmt == 'tagged_sentence':
+                    print(' '.join('_'.join((l.word,l.pos)) for l in leaves(t)))
                 else:
-                    stack.extend(reversed(list(t.children())))
-            print(' '.join(words))
+                    raise ValueError()
 
     if args['test']:
         dotests()
