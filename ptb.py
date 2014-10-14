@@ -320,18 +320,18 @@ class Span(object):
         self.end = end
 
     def tojson(self):
-        return [str(self.label), self.begin, self.end]
+        return [self.label and str(self.label), self.begin, self.end]
 
 
-class GroundedTree(object):
-    def __init__(self, span, children):
-        self.span = span
-        self.children = children
+class AnchoredTree(object):
+    def __init__(self, spans, edges):
+        self.spans = spans
+        self.edges = edges
 
     def tojson(self):
         return {
-            "head" : self.span.tojson(),
-            "children" : [c.tojson() for c in self.children]
+            "spans" : [s.tojson() for s in self.spans],
+            "edges" : self.edges
         }
 
 
@@ -374,35 +374,49 @@ class ParsedSentence(object):
 
 
 TERMINAL_NODE_LABEL = '<t>'
-def make_grounded(tx):
-    state = ([([], 0)], 0)
+def make_anchored(tx):
+    state = (
+        [],            # [<begin>] (pre)→(post) [(<span>, (<index>, [<child_indices>]))]
+        [(-1, [])],    # [(<index>, <child_indices>)]
+        0,             # next_index
+        0              # current_offset
+    )
 
     def pre(tx, st):
-        stack, begin = st
+        "save post-order index and current token offset"
+        nodes, stack, index, begin = st
         return (
-            stack + [([], begin)],
+            nodes + [begin],
+            stack + [(index, [])],
+            index + 1,
             begin
         )
 
     def post(tx, st):
-        stack, end = st
-        children, begin = stack.pop()
+        "save span and edge to <nodes> at <index>"
+        nodes, stack, next_index, end = st
+        index, children = stack.pop()
+
         if tx.leaf():
             end += 1
-        grounded = GroundedTree(
+
+        begin = nodes[index]
+        nodes[index] = (
             Span(
-                tx.symbol() or TERMINAL_NODE_LABEL,
+                tx.symbol(),
                 begin,
                 end
             ),
-            children
+            (index, children)
         )
-        stack[-1][0].append(grounded)
-        return (stack, end)
 
-    stack, _ = traverse(tx, pre, post, state)
-    gs, _ = stack[0]
-    return gs[0]
+        stack[-1][-1].append(index)
+        return (nodes, stack, next_index, end)
+
+    nodes, _, _, _ = traverse(tx, pre, post, state)
+    spans = [s for s,e in nodes]
+    edges = [e for s,e in nodes]
+    return AnchoredTree(spans, edges)
 
 def leaves(tx):
     def proc(tx, st):
@@ -410,7 +424,7 @@ def leaves(tx):
     return traverse(tx, proc, state=[])
 
 def make_parsed_sent(tx):
-    return ParsedSentence(leaves(tx), make_grounded(tx))
+    return ParsedSentence(leaves(tx), make_anchored(tx))
 
 
 ##################
