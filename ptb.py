@@ -376,7 +376,7 @@ class ParsedSentence(object):
 TERMINAL_NODE_LABEL = '<t>'
 def make_anchored(tx):
     state = (
-        [],            # [<begin>] (pre)→(post) [(<span>, (<index>, [<child_indices>]))]
+        [],            # [<begin>] (pre)→(post) [(<span>, (<index>, [<child_indices>]) | None)]
         [(-1, [])],    # [(<index>, <child_indices>)]
         0,             # next_index
         0              # current_offset
@@ -407,7 +407,7 @@ def make_anchored(tx):
                 begin,
                 end
             ),
-            (index, children)
+            (index, children) if not tx.leaf() else None
         )
 
         stack[-1][-1].append(index)
@@ -415,7 +415,7 @@ def make_anchored(tx):
 
     nodes, _, _, _ = traverse(tx, pre, post, state)
     spans = [s for s,e in nodes]
-    edges = [e for s,e in nodes]
+    edges = [e for s,e in nodes if e]
     return AnchoredTree(spans, edges)
 
 def leaves(tx):
