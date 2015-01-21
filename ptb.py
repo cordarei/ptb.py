@@ -136,6 +136,12 @@ class TExpr:
         else:
             return None
 
+    def rule(self):
+        if self.leaf():
+            return '{} -> {}'.format(self.leaf().pos, self.leaf().word)
+        else:
+            return '{} -> {}'.format(self.symbol(), ' '.join(str(c.symbol() or c.leaf().pos) for c in self.children()))
+
     def __str__(self):
         if self.leaf():
             return '({} {})'.format(self.leaf().pos, self.leaf().word)
@@ -265,6 +271,15 @@ def add_root(tx, root_label='ROOT'):
 # Other Useful Functions
 ##################
 
+def all_rules(tx):
+    """
+    Returns a list of the production rules in a tree.
+    """
+    def pre(tx, st):
+        if tx.leaf():
+            return st
+        return st + [tx.rule()]
+    return traverse(tx, pre, state=[])
 
 def all_spans(tx):
     """
@@ -476,6 +491,15 @@ def main(args):
             import json
             o = {'sentences' : [make_parsed_sent(t).tojson() for t in trees()]}
             print(json.dumps(o))
+        elif fmt == 'rules':
+            import collections
+            rules = collections.Counter(
+                r
+                for t in trees()
+                for r in all_rules(t)
+            )
+            for r,c in rules.most_common():
+                print(r,c,sep='\t')
         else:
             for t in trees():
                 # output
