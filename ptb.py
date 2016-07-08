@@ -95,8 +95,13 @@ class Symbol:
             elif m.group('coind'):
                 self.coindex = m.group('coind')
 
-    def simplify(self):
-        self.tags = []
+    def simplify(self, keep_sbj=False):
+        ts = self.tags
+        if 'SBJ' in ts and keep_sbj:
+            ts = ['SBJ']
+        else:
+            ts = []
+        self.tags = ts
         self.coindex = None
         self.parindex = None
 
@@ -252,10 +257,10 @@ def remove_empty_elements(tx):
     state = traverse(tx, pre, post, state)
 
 
-def simplify_labels(tx):
+def simplify_labels(tx, keep_sbj=False):
     def proc(tx, st):
         if tx.symbol():
-            tx.symbol().simplify()
+            tx.symbol().simplify(keep_sbj)
     traverse(tx, proc)
 
 
@@ -459,6 +464,7 @@ def main(args):
       --add-root                Add a root node to the tree.
       -r=ROOT --root=ROOT       Specify label of root node. [default: ROOT]
       --simplify-labels         Simplify constituent labels.
+      --keep-sbj-tags           Preserve -SBJ tags when simplifying labels [default: False]
       --remove-empties          Remove empty elements.
       --format FMT              Specify format to output trees in. [default: ptb]
       -h --help                 Show this screen.
@@ -472,7 +478,7 @@ def main(args):
         if args['--remove-empties']:
             remove_empty_elements(t)
         if args['--simplify-labels']:
-            simplify_labels(t)
+            simplify_labels(t, args['--keep-sbj-tags'])
         if args['--add-root']:
             t = add_root(t, root_label=args['--root'])
         return t
