@@ -148,6 +148,12 @@ class TExpr:
         else:
             return '{} -> {}'.format(self.symbol(), ' '.join(str(c.symbol() or c.leaf().pos) for c in self.children()))
 
+    def rule_tpl(self):
+        if self.leaf():
+            return (self.leaf().pos, self.leaf().word)
+        else:
+            return (str(self.symbol()), ' '.join(str(c.symbol() or c.leaf().pos) for c in self.children()))
+
     def __str__(self):
         if self.leaf():
             return '({} {})'.format(self.leaf().pos, self.leaf().word)
@@ -286,6 +292,16 @@ def all_rules(tx):
             return st
         return st + [tx.rule()]
     return traverse(tx, pre, state=[])
+
+def grammar_rules(tx):
+    """
+    Returns a list of the production rules in a tree.
+    Rules are pairs like: (lhs, [rhs]). Includes lexical rules
+    """
+    def pre(tx, st):
+        return st + [tx.rule_tpl()]
+    return traverse(tx, pre, state=[])
+
 
 def all_spans(tx):
     """
@@ -507,6 +523,20 @@ def main(args):
             )
             for r,c in rules.most_common():
                 print(r,c,sep='\t')
+        elif fmt == 'grammar':
+            import collections
+            rules = collections.Counter(
+                r
+                for t in trees()
+                for r in grammar_rules(t)
+            )
+            gram = dict()
+            for r,c in rules.most_common():
+                gram.setdefault(r[0], []).append((r[1], c))
+            for lhs in gram:
+                total = float(sum(c for rhs,c in gram[lhs]))
+                for rhs,c in gram[lhs]:
+                    print('{} -> {}\t{}'.format(lhs, rhs, c/total))
         else:
             for t in trees():
                 # output
