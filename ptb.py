@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# encoding: utf-8
 
 """
 ptb.py: Module for reading and transforming trees in the Penn Treebank
