@@ -85,6 +85,7 @@ class Symbol:
         self.tags = []
         self.coindex = None
         self.parindex = None
+        self.parent = None
         for m in self._pat.finditer(label):
             if m.group('label'):
                 self.label = m.group('label')
@@ -104,13 +105,15 @@ class Symbol:
         self.tags = ts
         self.coindex = None
         self.parindex = None
+        self.parent = None
 
     def __str__(self):
-        return '{}{}{}{}'.format(
+        return '{}{}{}{}{}'.format(
             self.label,
             ''.join('-{}'.format(t) for t in self.tags),
             ('={}'.format(self.parindex) if self.parindex is not None else ''),
-            ('-{}'.format(self.coindex) if self.coindex is not None else '')
+            ('-{}'.format(self.coindex) if self.coindex is not None else ''),
+            ('^{}'.format(self.parent) if self.parent is not None else '')
         )
 
 class Leaf:
@@ -268,6 +271,38 @@ def simplify_labels(tx, keep_sbj=False):
         if tx.symbol():
             tx.symbol().simplify(keep_sbj)
     traverse(tx, proc)
+
+def annot_parent(tx, keep_sbj=False):
+    def pre(tx, st):
+        s = ''
+        if tx.symbol():
+            s = '-'.join([tx.symbol().label] + tx.symbol().tags)
+        # else:
+        #     s = tx.leaf().pos
+        if st:
+            parent = st[-1]
+            if tx.symbol():
+                tx.symbol().parent = parent
+            # else:
+            #     tx.leaf().pos = str(tx.leaf().pos) + '^' + parent
+        return st + [s]
+    def post(tx, st):
+        return st[:-1]
+    traverse(tx, pre, post, state=[])
+
+def remove_parent(tx, keep_sbj=False):
+    def pre(tx, st):
+        if tx.symbol():
+            tx.symbol().label = tx.symbol().label.split('^')[0]
+        else:
+            tx.leaf().pos = tx.leaf().pos.split('^')[0]
+    traverse(tx, pre)
+
+def mark_top(tx, keep_sbj=False):
+    cs = list(tx.children())
+    assert(len(cs) == 1)
+    cs[0].symbol().parent = 'ROOT'
+    return tx
 
 
 _dummy_labels = ('ROOT', 'TOP')
@@ -481,11 +516,14 @@ def main(args):
       -r=ROOT --root=ROOT       Specify label of root node. [default: ROOT]
       --simplify-labels         Simplify constituent labels.
       --keep-sbj-tags           Preserve -SBJ tags when simplifying labels [default: False]
+      --annotate-parent         Add parent label annotation to tree node labels. [default: False]
+      --remove-parent           Remove parent label annotation from tree node labels. [default: False]
+      --mark-top                Mark the top constituent with ^ROOT. [default: False]
       --remove-empties          Remove empty elements.
       --format FMT              Specify format to output trees in. [default: ptb]
       -h --help                 Show this screen.
 
-    Support output formats are: ptb, json, sentence, tagged_sentence.
+    Support output formats are: ptb, json, sentence, tagged_sentence, rules, grammar.
     """
     from docopt import docopt
     args = docopt(main.__doc__, argv=args)
@@ -497,6 +535,12 @@ def main(args):
             simplify_labels(t, args['--keep-sbj-tags'])
         if args['--add-root']:
             t = add_root(t, root_label=args['--root'])
+        if args['--annotate-parent']:
+            annot_parent(t)
+        if args['--remove-parent']:
+            remove_parent(t)
+        if args['--mark-top']:
+            mark_top(t)
         return t
 
     def trees():
